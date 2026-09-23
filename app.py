@@ -44,7 +44,14 @@ def load_age_gender_model():
 
 @st.cache_resource
 def load_emotion_model():
-    return tf.keras.models.load_model("emotion_model.h5", compile=False)
+    return tf.keras.models.load_model(
+        "emotion_model.h5",
+        compile=False,
+        safe_mode=False,
+        custom_objects={
+            "preprocess_input": tf.keras.applications.vgg16.preprocess_input
+        }
+    )
 
 age_gender_model = load_age_gender_model()
 emotion_model = load_emotion_model()
