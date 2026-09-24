@@ -154,9 +154,9 @@ if uploaded_file is not None:
     image = Image.open(uploaded_file)
 
     st.subheader("📷 Uploaded Image Preview")
-    st.image(image, caption="Uploaded Image", use_container_width=True)
+    st.image(image, caption="Uploaded Image", use_container_width=False)
 
-    predict_btn = st.button("🔍 Predict", use_container_width=True)
+    predict_btn = st.button("🔍 Predict", use_container_width=False)
 
     if predict_btn:
 
