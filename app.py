@@ -308,7 +308,7 @@ st.caption("Upload a close-up face photo, or take one with your camera, to get a
 # =============================================================
 # Input
 # =============================================================
-tab_upload, tab_camera = st.tabs(["Upload a photo", "Use camera"])
+tab_upload = st.tabs(["Upload a photo"])
 
 raw_bytes = None
 
@@ -323,15 +323,6 @@ with tab_upload:
             st.error(f"That file is larger than {MAX_UPLOAD_MB} MB. Upload a smaller image.")
         else:
             raw_bytes = uploaded.getvalue()
-
-with tab_camera:
-    camera_shot = st.camera_input("Take a photo", label_visibility="collapsed")
-    if camera_shot is not None and raw_bytes is None:
-        raw_bytes = camera_shot.getvalue()
-
-if raw_bytes is None:
-    st.info("Upload or capture a clear, front-facing photo to see the predictions.")
-    st.stop()
 
 try:
     image = load_image(raw_bytes)
