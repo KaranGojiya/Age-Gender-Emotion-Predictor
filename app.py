@@ -8,20 +8,7 @@ import pandas as pd
 import altair as alt
 import streamlit as st
 import tensorflow as tf
-from PIL import Image, ImageDraw, ImageOps
-
-# Optional: face detection. The app still works without OpenCV.
-try:
-    import cv2
-    _CASCADE = cv2.CascadeClassifier(
-        cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-    )
-    FACE_DETECTION_AVAILABLE = not _CASCADE.empty()
-except Exception:
-    cv2 = None
-    _CASCADE = None
-    FACE_DETECTION_AVAILABLE = False
-
+from PIL import Image, ImageOps
 
 # =============================================================
 # Page config
@@ -156,38 +143,6 @@ def load_image(raw_bytes):
     return image.convert("RGB")
 
 
-def detect_largest_face(image, margin=0.25):
-    """
-    Returns (crop, box, n_faces). box is (x1, y1, x2, y2) in original pixels.
-    Returns (None, None, 0) when no face is found or OpenCV is missing.
-    """
-    if not FACE_DETECTION_AVAILABLE:
-        return None, None, 0
-
-    gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
-    faces = _CASCADE.detectMultiScale(
-        gray, scaleFactor=1.1, minNeighbors=5, minSize=(60, 60)
-    )
-    if len(faces) == 0:
-        return None, None, 0
-
-    x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
-    pad_x, pad_y = int(w * margin), int(h * margin)
-    x1 = max(0, x - pad_x)
-    y1 = max(0, y - pad_y)
-    x2 = min(image.width, x + w + pad_x)
-    y2 = min(image.height, y + h + pad_y)
-    return image.crop((x1, y1, x2, y2)), (x1, y1, x2, y2), len(faces)
-
-
-def draw_box(image, box):
-    preview = image.copy()
-    draw = ImageDraw.Draw(preview)
-    width = max(3, image.width // 200)
-    draw.rectangle(box, outline=(46, 204, 113), width=width)
-    return preview
-
-
 def to_display(image, max_side=640):
     display = image.copy()
     display.thumbnail((max_side, max_side))
@@ -309,28 +264,14 @@ def predict_emotion(image):
 
 
 @st.cache_data(show_spinner=False, max_entries=32)
-def run_inference(raw_bytes, use_face_crop):
-    """Cached per (image, setting) so reruns are instant and predictions stay stable."""
+def run_inference(raw_bytes):
+    """Cached per image so reruns are instant and predictions stay stable."""
     image = load_image(raw_bytes)
-    original_size = image.size
-
-    face_crop, box, n_faces = (None, None, 0)
-    if use_face_crop:
-        face_crop, box, n_faces = detect_largest_face(image)
-
-    model_input = face_crop if face_crop is not None else image
 
     result = {}
-    result.update(predict_age_gender(model_input))
-    result.update(predict_emotion(model_input))
-    result.update(
-        {
-            "original_size": original_size,
-            "face_box": box,
-            "faces_found": n_faces,
-            "used_face_crop": face_crop is not None,
-        }
-    )
+    result.update(predict_age_gender(image))
+    result.update(predict_emotion(image))
+    result["original_size"] = image.size
     return result
 
 
@@ -338,30 +279,21 @@ def run_inference(raw_bytes, use_face_crop):
 # Sidebar
 # =============================================================
 with st.sidebar:
-    st.header("Settings")
-
-    if FACE_DETECTION_AVAILABLE:
-        use_face_crop = st.toggle(
-            "Detect and crop the face",
-            value=True,
-            help="Finds the largest face and crops it before prediction. "
-                 "Turn off if your photo is already a tight face crop.",
-        )
-    else:
-        use_face_crop = False
-        st.caption(
-            "Face detection is off. Add `opencv-python-headless` to "
-            "requirements.txt to enable it."
-        )
-
-    st.divider()
     st.header("How it works")
     st.markdown(
         f"""
-        - Two CNN models run on the same 224×224 face image.
-        - **Age and gender:** multi-task model trained on {AGE_GENDER_DATASET}.
-        - **Emotion:** separate 7-class model{f" trained on {EMOTION_DATASET}" if EMOTION_DATASET else ""}.
+        - Two CNN models with a **VGG16** backbone run on the same 224×224 image.
+        - **Age and gender:** one multi-task model trained on {AGE_GENDER_DATASET}.
+        - **Emotion:** a separate 7-class model{f" trained on {EMOTION_DATASET}" if EMOTION_DATASET else ""}.
         - Images are processed in memory and are not stored by this app.
+        """
+    )
+    st.subheader("Tips for better results")
+    st.markdown(
+        """
+        - Use a close-up, front-facing photo where the face fills most of the frame.
+        - Use good lighting and avoid heavy filters.
+        - One person per photo.
         """
     )
     st.caption("Predictions are estimates and should not be used to make decisions about people.")
@@ -371,7 +303,7 @@ with st.sidebar:
 # Header
 # =============================================================
 st.title("Age, Gender & Emotion Predictor")
-st.caption("Upload a face photo, or take one with your camera, to get all three predictions.")
+st.caption("Upload a close-up face photo, or take one with your camera, to get all three predictions.")
 
 # =============================================================
 # Input
@@ -411,7 +343,7 @@ except Exception:
 # Inference
 # =============================================================
 with st.spinner("Analyzing image..."):
-    res = run_inference(raw_bytes, use_face_crop)
+    res = run_inference(raw_bytes)
 
 # =============================================================
 # Results
@@ -420,14 +352,8 @@ left, right = st.columns([1, 1.25], gap="large")
 
 with left:
     st.subheader("Photo")
-    if res["face_box"] is not None:
-        st.image(to_display(draw_box(image, res["face_box"])), caption="Detected face (used for prediction)")
-        if res["faces_found"] > 1:
-            st.warning(f"{res['faces_found']} faces found. Using the largest one.")
-    else:
-        st.image(to_display(image), caption="Full image (used for prediction)")
-        if use_face_crop:
-            st.warning("No face detected, so the full image was used. Try a clearer, front-facing photo.")
+    st.image(to_display(image), caption="Image used for prediction")
+
 
 with right:
     st.subheader("Predictions")
@@ -547,7 +473,6 @@ export = {
     "emotion_probabilities_pct": {
         k: round(v * 100, 2) for k, v in res["probabilities"].items()
     },
-    "face_detected": res["used_face_crop"],
     "inference_ms": round(res["age_gender_ms"] + res["emotion_ms"], 1),
 }
 st.download_button(
