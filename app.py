@@ -1,7 +1,6 @@
 import io
 import json
 import time
-import hashlib
 
 import numpy as np
 import pandas as pd
@@ -303,26 +302,27 @@ with st.sidebar:
 # Header
 # =============================================================
 st.title("Age, Gender & Emotion Predictor")
-st.caption("Upload a close-up face photo, or take one with your camera, to get all three predictions.")
+st.caption("Upload a close-up face photo to get all three predictions.")
 
 # =============================================================
 # Input
 # =============================================================
-tab_upload = st.tabs(["Upload a photo"])
+uploaded = st.file_uploader(
+    "Choose a JPG or PNG image",
+    type=["jpg", "jpeg", "png"],
+    label_visibility="collapsed",
+)
 
 raw_bytes = None
+if uploaded is not None:
+    if uploaded.size > MAX_UPLOAD_MB * 1024 * 1024:
+        st.error(f"That file is larger than {MAX_UPLOAD_MB} MB. Upload a smaller image.")
+    else:
+        raw_bytes = uploaded.getvalue()
 
-with tab_upload:
-    uploaded = st.file_uploader(
-        "Choose a JPG or PNG image",
-        type=["jpg", "jpeg", "png"],
-        label_visibility="collapsed",
-    )
-    if uploaded is not None:
-        if uploaded.size > MAX_UPLOAD_MB * 1024 * 1024:
-            st.error(f"That file is larger than {MAX_UPLOAD_MB} MB. Upload a smaller image.")
-        else:
-            raw_bytes = uploaded.getvalue()
+if raw_bytes is None:
+    st.info("Upload a clear, front-facing photo to see the predictions.")
+    st.stop()
 
 try:
     image = load_image(raw_bytes)
@@ -399,7 +399,7 @@ with right:
         )
         .properties(height=230)
     )
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width="stretch")
 
 # =============================================================
 # Prediction quality metrics
