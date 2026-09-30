@@ -1,4 +1,7 @@
-streamlit
-tensorflow
+streamlit>=1.36
+tensorflow>=2.13
 numpy
-pillow
+pandas
+altair
+Pillow
+opencv-python-headless
